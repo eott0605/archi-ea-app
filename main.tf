@@ -19,6 +19,7 @@ terraform {
 provider "azurerm" {
   features {}
   use_oidc = true # Tells the provider to use GitHub's OIDC login
+  skip_provider_registration = true
 }
 
 # The new Storage Account you want to automatically create
