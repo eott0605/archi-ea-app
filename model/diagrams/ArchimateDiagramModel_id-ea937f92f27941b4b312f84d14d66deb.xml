@@ -402,8 +402,8 @@
       textAlignment="1"
       content="This keeps from having data in a bucket creating charges when no longer useful.">
     <bounds
-        x="792"
-        y="144"
+        x="788"
+        y="72"
         width="169"
         height="80"/>
   </children>
