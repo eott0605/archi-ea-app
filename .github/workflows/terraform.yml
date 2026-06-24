@@ -78,30 +78,15 @@ jobs:
         # Use grep and sed to isolate exactly your clean account name: modelinfoaccount
         cat raw_output.txt | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ' > sa_name.txt
 
-    # 8. Whitelist IP, Upload CSV Files, and Restore Security Firewall
-    - name: Upload CSV Files to Private Azure Blob
+    # 8. Clean, high-speed direct upload (No firewall switching needed!)
+    - name: Upload CSV Files to Azure Blob
       uses: azure/cli@v2
       env:
         TARGET_ACCOUNT: ${{ steps.get_sa_name.outputs.storage_account }}
-        RESOURCE_GROUP: "archi-ea-app-rg"
       with:
         inlineScript: |
-          # Fetch the public IP of the runner cleanly inside the container
-          RUNNER_IP=$(curl -s https://ifconfig.me)
-          echo "GitHub Runner Public IP identified as: $RUNNER_IP"
+          echo "Uploading CSV files securely via pre-authorized pipeline rules..."
           
-          # Temporarily allow public network paths and authorize the runner's IP
-          echo "Temporarily modifying Azure firewall rules..."
-          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled
-          
-          # FIXED TYPO: Changed --name to --account-name below
-          az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-          
-          # Wait 60 seconds for Azure's firewall changes to propagate globally
-          sleep 60
-          
-          # Execute file upload 
-          echo "Uploading CSV files..."
           az storage blob upload-batch \
             --account-name "$TARGET_ACCOUNT" \
             --destination "modelinfocontainer" \
@@ -109,8 +94,5 @@ jobs:
             --pattern "*.csv" \
             --overwrite true \
             --auth-mode login
-            
-          # REMOVED: The cleanup lines have been deleted so Azure maintains your main.tf network block state!
-          echo "Upload complete. Leaving firewall active for selected network access."
-          
+
 

@@ -24,23 +24,27 @@ provider "azurerm" {
 
 # The new Storage Account you want to automatically create
 resource "azurerm_storage_account" "blob_storage" {
-  name                     = "modelinfoaccount"       # Must be unique globally, lowercase letters/numbers only
-  resource_group_name      = "archi-ea-app-rg" # Your existing target RG
+  name                     = "modelinfoaccount"       
+  resource_group_name      = "archi-ea-app-rg" 
   location                 = "eastus"
   account_tier             = "Standard"
   account_replication_type = "LRS"
   account_kind             = "StorageV2"
 
-  # Enforce high security settings
   min_tls_version               = "TLS1_2"
   https_traffic_only_enabled    = true
-  # CHANGED: Allow public access ONLY from your whitelisted networks/IPs
   public_network_access_enabled = true 
 
-  # ADD THIS BLOCK TO ENABLE THE FIREWALL
+  # PERMANENT SECURE FIREWALL BASELINE
   network_rules {
-    default_action             = "Deny"
-    bypass                     = ["AzureServices"]
+    default_action             = "Deny" # Blocks the whole public internet
+    bypass                     = ["AzureServices"] # Allows internal portal tools to load safely
+    
+    # Merges your personal computer IP and all official GitHub runner IPs together
+    ip_rules = concat(
+      ["47.201.174.117"], # <-- Your personal IP stays here permanently
+      local.github_actions_ipv4
+    )
   }
 }
 
@@ -53,4 +57,16 @@ resource "azurerm_storage_container" "blob_container" {
 output "storage_account_name" {
   value       = azurerm_storage_account.blob_storage.name
   description = "The name of the newly created storage account."
+}
+
+# Automatically fetches the official live list of GitHub IP addresses
+data "http" "github_meta" {
+  url = "https://github.com"
+}
+
+# Decodes the JSON response to extract only the Actions runner IPv4 addresses
+locals {
+  github_actions_ips = jsondecode(data.http.github_meta.response_body).actions
+  # Filters out IPv6 addresses because Azure Storage Firewalls only support IPv4 CIDR blocks
+  github_actions_ipv4 = [for ip in local.github_actions_ips : ip if !contains(split("", ip), ":")]
 }
