@@ -544,13 +544,13 @@
           name="labelExpression"
           value="OIDC"/>
       <bendpoints
-          startX="-88"
-          endX="312"
+          startX="-76"
+          endX="324"
           endY="107"/>
       <bendpoints
-          startX="-88"
+          startX="-76"
           startY="-84"
-          endX="312"
+          endX="324"
           endY="23"/>
       <archimateRelationship
           xsi:type="archimate:ServingRelationship"
