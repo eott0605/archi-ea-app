@@ -105,7 +105,7 @@ jobs:
           az storage blob upload-batch \
             --account-name "$TARGET_ACCOUNT" \
             --destination "data-files" \
-            --source "./data" \
+            --source "." \
             --pattern "*.csv" \
             --overwrite true \
             --auth-mode login
