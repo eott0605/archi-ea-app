@@ -98,7 +98,7 @@ jobs:
           az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
           
           # Wait 20 seconds for Azure's firewall changes to propagate globally
-          sleep 20
+          sleep 60
           
           # Execute file upload 
           echo "Uploading CSV files..."
