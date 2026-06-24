@@ -22,7 +22,6 @@ provider "azurerm" {
   skip_provider_registration = true
 }
 
-# The new Storage Account you want to automatically create
 resource "azurerm_storage_account" "blob_storage" {
   name                     = "modelinfoaccount"       
   resource_group_name      = "archi-ea-app-rg" 
@@ -35,23 +34,29 @@ resource "azurerm_storage_account" "blob_storage" {
   https_traffic_only_enabled    = true
   public_network_access_enabled = true 
 
-  # PERMANENT SECURE FIREWALL BASELINE
+  # Keep your laptop whitelisted permanently so you can always view the data
   network_rules {
-    default_action             = "Deny" # Blocks the whole public internet
-    bypass                     = ["AzureServices"] # Allows internal portal tools to load safely
-    
-    # Merges your personal computer IP and all official GitHub runner IPs together
-    ip_rules = concat(
-      ["47.201.174.117"], # <-- Your personal IP stays here permanently
-      local.github_actions_ipv4
-    )
+    default_action             = "Deny"
+    bypass                     = ["AzureServices"]
+    ip_rules                   = ["47.201.174.117"] 
   }
 }
 
 resource "azurerm_storage_container" "blob_container" {
-  name                  = "modelinfocontainer" # Name of your blob folder
+  name                  = "modelinfocontainer"
   storage_account_id    = azurerm_storage_account.blob_storage.id
-  container_access_type = "private" # Keeps your data safe and private
+  container_access_type = "private" 
+}
+
+# Also add an output for the storage connection string
+output "storage_connection_string" {
+  value     = azurerm_storage_account.blob_storage.primary_connection_string
+  sensitive = true
+}
+
+output "storage_account_name" {
+  value       = azurerm_storage_account.blob_storage.name
+  description = "The name of the newly created storage account."
 }
 
 output "storage_account_name" {
