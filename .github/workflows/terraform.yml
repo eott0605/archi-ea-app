@@ -105,24 +105,25 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Extract the storage account name cleanly by filtering out the debug garbage
-    - name: Get Storage Account Name
-      id: get_sa_name
+    # 7. Force Terraform to output directly to a clean file instead of the console log
+    - name: Save Storage Account Name to File
       run: |
-        # Use awk to grab ONLY the first clean word, discarding runner debug messages
-        CLEAN_NAME=$(terraform output -raw storage_account_name | awk '{print $1}' | tr -d '\r\n')
-        echo "CLEAN_AZURE_STORAGE_ACCOUNT=$CLEAN_NAME" >> $GITHUB_ENV
+        terraform output -raw storage_account_name > sa_name.txt
 
-    # 8. Upload CSV Files using the clean environment variable
+    # 8. Read the clean file inside the Azure CLI Action and upload
     - name: Upload CSV Files to Azure Blob
-      uses: azure/CLI@v2
+      uses: azure/azure-cli-action@v2
       with:
         inlineScript: |
+          # Read the clean file we generated in the previous step
+          ACCOUNT_NAME=$(cat sa_name.txt | tr -d '\r\n ')
+          
+          echo "Deploying files to storage account: $ACCOUNT_NAME"
+
           az storage blob upload-batch \
-            --account-name "$CLEAN_AZURE_STORAGE_ACCOUNT" \
+            --account-name "$ACCOUNT_NAME" \
             --destination "data-files" \
             --source "." \
             --pattern "*.csv" \
             --overwrite true \
             --auth-mode login
-
