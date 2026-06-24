@@ -35,6 +35,12 @@ resource "azurerm_storage_account" "blob_storage" {
   min_tls_version               = "TLS1_2"
   https_traffic_only_enabled    = true
   public_network_access_enabled = false # Keeps it safe from the public web
+
+  # ADD THIS BLOCK TO ENABLE THE FIREWALL
+  network_rules {
+    default_action             = "Deny"
+    bypass                     = ["AzureServices"]
+  }
 }
 
 resource "azurerm_storage_container" "blob_container" {
