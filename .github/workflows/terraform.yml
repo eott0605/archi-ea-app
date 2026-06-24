@@ -112,7 +112,7 @@ jobs:
 
     # 8. Read the clean file inside the Azure CLI Action and upload
     - name: Upload CSV Files to Azure Blob
-      uses: azure/azure-cli-action@v2
+      uses: azure/CLI@v2
       with:
         inlineScript: |
           # Read the clean file we generated in the previous step
