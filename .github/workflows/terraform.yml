@@ -1,4 +1,3 @@
-
 name: 'Terraform'
 
 on:
@@ -10,89 +9,69 @@ permissions:
   id-token: write
   contents: read
 
-# env:
-  # ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  # ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  # ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  # ARM_USE_OIDC: true
-
 jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
     environment: production
 
-    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
     defaults:
       run:
         shell: bash
 
     steps:
-    # Checkout the repository to the GitHub Actions runner
+    # 1. Checkout the repository to the GitHub Actions runner
     - name: Checkout
       uses: actions/checkout@v4
 
+    # 2. Log in securely via OIDC
     - name: Azure Login
       uses: azure/login@v2
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        # auth-type: IDENTITY
 
-    # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+    # 3. Install Terraform CLI
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
 
-    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    # 4. Initialize Terraform directory configuration
     - name: Terraform Init
       run: terraform init
 
-    # Checks that all Terraform configuration files adhere to a canonical format
-    #- name: Terraform Format
-    #  run: terraform fmt -check
-
-    # Generates an execution plan for Terraform
+    # 5. Generates an execution plan for Terraform
     - name: Terraform Plan
       run: terraform plan -input=false
 
-      # On push to "master", build or change infrastructure according to Terraform configuration files
-      # Note: It is recommended to set up a required "strict" status check in your repository for "Terraform Cloud". See the documentation on "strict" required status checks for more information: https://help.github.com/en/github/administering-a-repository/types-of-required-status-checks
+    # 6. Apply changes on push to master branch
     - name: Terraform Apply
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Extract the storage account name cleanly using step outputs
-    - name: Get Storage Account Name
-      id: get_sa_name
+    # 7. FIXED: Combined extraction of account name and connection string to GITHUB_OUTPUT
+    - name: Get Storage Account Variables
+      id: get_sa_vars
       run: |
-        # Strip all formatting and isolate the name: modelinfoaccount
         CLEAN_NAME=$(terraform output -raw storage_account_name | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ')
         echo "storage_account=$CLEAN_NAME" >> $GITHUB_OUTPUT
-
-    # 7. Dump the text and scrub out the HashiCorp setup-terraform wrapper text
-    - name: Save Storage Account Name to File
-      run: |
-        terraform output -raw storage_account_name > raw_output.txt
         
-        # Use grep and sed to isolate exactly your clean account name: modelinfoaccount
-        cat raw_output.txt | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ' > sa_name.txt
+        CONN_STR=$(terraform output -raw storage_connection_string | tr -d '\r\n')
+        echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
 
-    # 8. Clean, high-speed direct upload (No firewall switching needed!)
+    # 8. High-speed direct upload using the secure connection string bypass
     - name: Upload CSV Files to Azure Blob
       uses: azure/cli@v2
       env:
-        TARGET_ACCOUNT: ${{ steps.get_sa_name.outputs.storage_account }}
+        TARGET_ACCOUNT: ${{ steps.get_sa_vars.outputs.storage_account }}
+        CONNECTION_STRING: ${{ steps.get_sa_vars.outputs.connection_string }}
       with:
         inlineScript: |
-          echo "Uploading CSV files securely via pre-authorized pipeline rules..."
+          echo "Uploading CSV files directly via secure connection string bypass..."
           
           az storage blob upload-batch \
-            --account-name "$TARGET_ACCOUNT" \
             --destination "modelinfocontainer" \
             --source "." \
             --pattern "*.csv" \
             --overwrite true \
-            --auth-mode login
-
-
+            --connection-string "$CONNECTION_STRING"
