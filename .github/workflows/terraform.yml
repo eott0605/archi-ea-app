@@ -1,46 +1,3 @@
-# This workflow installs the latest version of Terraform CLI and configures the Terraform CLI configuration file
-# with an API token for Terraform Cloud (app.terraform.io). On pull request events, this workflow will run
-# `terraform init`, `terraform fmt`, and `terraform plan` (speculative plan via Terraform Cloud). On push events
-# to the "master" branch, `terraform apply` will be executed.
-#
-# Documentation for `hashicorp/setup-terraform` is located here: https://github.com/hashicorp/setup-terraform
-#
-# To use this workflow, you will need to complete the following setup steps.
-#
-# 1. Create a `main.tf` file in the root of this repository with the `remote` backend and one or more resources defined.
-#   Example `main.tf`:
-#     # The configuration for the `remote` backend.
-#     terraform {
-#       backend "remote" {
-#         # The name of your Terraform Cloud organization.
-#         organization = "example-organization"
-#
-#         # The name of the Terraform Cloud workspace to store Terraform state files in.
-#         workspaces {
-#           name = "example-workspace"
-#         }
-#       }
-#     }
-#
-#     # An example resource that does nothing.
-#     resource "null_resource" "example" {
-#       triggers = {
-#         value = "A example resource that does nothing!"
-#       }
-#     }
-#
-#
-# 2. Generate a Terraform Cloud user API token and store it as a GitHub secret (e.g. TF_API_TOKEN) on this repository.
-#   Documentation:
-#     - https://www.terraform.io/docs/cloud/users-teams-organizations/api-tokens.html
-#     - https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets
-#
-# 3. Reference the GitHub secret in step using the `hashicorp/setup-terraform` GitHub Action.
-#   Example:
-#     - name: Setup Terraform
-#       uses: hashicorp/setup-terraform@v1
-#       with:
-#         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
 name: 'Terraform'
 
@@ -105,46 +62,47 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Dump the text and scrub out the HashiCorp setup-terraform wrapper text
-    - name: Save Storage Account Name to File
+    # 7. Extract the storage account name cleanly using step outputs
+    - name: Get Storage Account Name
+      id: get_sa_name
       run: |
-        terraform output -raw storage_account_name > raw_output.txt
-        
-        # Use grep and sed to isolate exactly your clean account name: modelinfoaccount
-        cat raw_output.txt | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ' > sa_name.txt
+        # Strip all formatting and isolate the name: modelinfoaccount
+        CLEAN_NAME=$(terraform output -raw storage_account_name | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ')
+        echo "storage_account=$CLEAN_NAME" >> $GITHUB_OUTPUT
 
-    # 8. Whitelist IP, Upload CSV Files, and Restore Security Firewall
+    # 8. Run your script inside azure/cli@v2 mapping environment blocks
     - name: Upload CSV Files to Private Azure Blob
-      uses: azure/CLI@v2
+      uses: azure/cli@v2
+      env:
+        # Map parameters explicitly to the environment so the Docker container can read them
+        TARGET_ACCOUNT: ${{ steps.get_sa_name.outputs.storage_account }}
+        RESOURCE_GROUP: "myResourceGroup"
       with:
         inlineScript: |
-          ACCOUNT_NAME=$(cat sa_name.txt)
-          RESOURCE_GROUP="myResourceGroup" 
-          
-          # Fixed: Use ifconfig.me to ensure a clean plain-text IP string string is returned
+          # Fetch the public IP of the runner cleanly inside the container
           RUNNER_IP=$(curl -s https://ifconfig.me)
           echo "GitHub Runner Public IP identified as: $RUNNER_IP"
           
           # Temporarily allow public network paths and authorize the runner's IP
           echo "Temporarily modifying Azure firewall rules..."
-          az storage account update --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled
-          az storage account network-rule add --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled
+          az storage account network-rule add --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
           
           # Wait 20 seconds for Azure's firewall changes to propagate globally
           sleep 20
           
-          # Execute the file batch upload securely via OIDC login session
+          # Execute file upload 
           echo "Uploading CSV files..."
           az storage blob upload-batch \
-            --account-name "$ACCOUNT_NAME" \
+            --account-name "$TARGET_ACCOUNT" \
             --destination "data-files" \
             --source "." \
             --pattern "*.csv" \
             --overwrite true \
             --auth-mode login
             
-          # Clean up: Delete the rule and lock the storage account back down
+          # Clean up and lock the account back down
           echo "Restoring secure private network baseline..."
-          az storage account network-rule remove --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-          az storage account update --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled
+          az storage account network-rule remove --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled
 
