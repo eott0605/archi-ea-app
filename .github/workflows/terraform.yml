@@ -61,7 +61,7 @@ jobs:
         CONN_STR=$(terraform output -raw storage_connection_string)
         echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
 
-    # 8. Whitelist IP, Upload Files via Connection String, and auto-cleanup
+    # 8. Whitelist IP, Wait for Network Sync, and Upload CSV Files
     - name: Upload CSV Files to Private Azure Blob
       env:
         TARGET_ACCOUNT: ${{ steps.get_sa_vars.outputs.storage_account }}
@@ -76,9 +76,9 @@ jobs:
         echo "Temporarily modifying Azure firewall rules..."
         az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
         
-        # C. Short pause for Azure network rules to propagate
-        echo "Waiting 20 seconds for Azure network propagation..."
-        sleep 20
+        # C. FIXED TIMING LOCATION: Wait 45 seconds right here to let the firewall sync!
+        echo "Waiting 45 seconds for Azure firewall rules to propagate globally..."
+        sleep 45
         
         # D. Execute file upload securely via Connection String
         echo "Uploading CSV files..."
@@ -92,4 +92,5 @@ jobs:
         # E. Clean up: Delete the runner IP rule, leaving your laptop IP intact!
         echo "Restoring secure private network baseline..."
         az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+
 
