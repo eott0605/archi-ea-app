@@ -105,10 +105,12 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Isolate the clean account name from Terraform output
+    # 7. Dump the text and scrub out the HashiCorp setup-terraform wrapper text
     - name: Save Storage Account Name to File
       run: |
         terraform output -raw storage_account_name > raw_output.txt
+        
+        # Use grep and sed to isolate exactly your clean account name: modelinfoaccount
         cat raw_output.txt | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ' > sa_name.txt
 
     # 8. Whitelist IP, Upload CSV Files, and Restore Security Firewall
@@ -117,21 +119,21 @@ jobs:
       with:
         inlineScript: |
           ACCOUNT_NAME=$(cat sa_name.txt)
-          RESOURCE_GROUP="myResourceGroup" # <-- Ensure this matches your storage account's RG
+          RESOURCE_GROUP="myResourceGroup" 
           
-          # A. Fetch the dynamic public IP of this specific GitHub Action Runner
-          RUNNER_IP=$(curl -s https://ipify.org)
+          # Fixed: Use ifconfig.me to ensure a clean plain-text IP string string is returned
+          RUNNER_IP=$(curl -s https://ifconfig.me)
           echo "GitHub Runner Public IP identified as: $RUNNER_IP"
           
-          # B. Temporarily allow public network paths and authorize the runner's IP
+          # Temporarily allow public network paths and authorize the runner's IP
           echo "Temporarily modifying Azure firewall rules..."
           az storage account update --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled
           az storage account network-rule add --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
           
-          # C. Wait 15 seconds for Azure's firewall changes to propagate globally
-          sleep 15
+          # Wait 20 seconds for Azure's firewall changes to propagate globally
+          sleep 20
           
-          # D. Execute the file batch upload securely via OIDC login session
+          # Execute the file batch upload securely via OIDC login session
           echo "Uploading CSV files..."
           az storage blob upload-batch \
             --account-name "$ACCOUNT_NAME" \
@@ -141,7 +143,8 @@ jobs:
             --overwrite true \
             --auth-mode login
             
-          # E. Clean up: Delete the rule and lock the storage account back down
+          # Clean up: Delete the rule and lock the storage account back down
           echo "Restoring secure private network baseline..."
           az storage account network-rule remove --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
           az storage account update --name "$ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled
+
