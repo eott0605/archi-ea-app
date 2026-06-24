@@ -51,32 +51,45 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Extract variables and aggressively filter out HashiCorp wrapper logs
+    # 7. Extract variables cleanly using the v3 wrapperless outputs
     - name: Get Storage Account Variables
       id: get_sa_vars
       run: |
-        # Isolate the clean account name
-        CLEAN_NAME=$(terraform output -raw storage_account_name | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ')
-        echo "storage_account=$CLEAN_NAME" >> $GITHUB_OUTPUT
+        ACCOUNT_NAME=$(terraform output -raw storage_account_name)
+        echo "storage_account=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
         
-        # Isolate ONLY the true connection string line, dropping all wrapper/debug noise
-        CONN_STR=$(terraform output -raw storage_connection_string | grep -E '^DefaultEndpointsProtocol=https' | tr -d '\r\n ')
+        CONN_STR=$(terraform output -raw storage_connection_string)
         echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
 
-
-    # 8. High-speed direct upload using the secure connection string bypass
-    - name: Upload CSV Files to Azure Blob
-      uses: azure/cli@v2
+    # 8. Whitelist IP, Upload Files via Connection String, and auto-cleanup
+    - name: Upload CSV Files to Private Azure Blob
       env:
         TARGET_ACCOUNT: ${{ steps.get_sa_vars.outputs.storage_account }}
         CONNECTION_STRING: ${{ steps.get_sa_vars.outputs.connection_string }}
-      with:
-        inlineScript: |
-          echo "Uploading CSV files directly via secure connection string bypass..."
+        RESOURCE_GROUP: "archi-ea-app-rg"
+      run: |
+        # A. Fetch the dynamic public IP of the runner cleanly
+        RUNNER_IP=$(curl -s https://ifconfig.me)
+        echo "GitHub Runner Public IP identified as: $RUNNER_IP"
+        
+        # B. Open firewall natively using the runner's pre-authenticated token
+        echo "Temporarily modifying Azure firewall rules..."
+        az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+        
+        # C. Short pause for Azure network rules to propagate
+        echo "Waiting 20 seconds for Azure network propagation..."
+        sleep 20
+        
+        # D. Execute file upload securely via Connection String
+        echo "Uploading CSV files..."
+        az storage blob upload-batch \
+          --destination "modelinfocontainer" \
+          --source "." \
+          --pattern "*.csv" \
+          --overwrite true \
+          --connection-string "$CONNECTION_STRING"
           
-          az storage blob upload-batch \
-            --destination "modelinfocontainer" \
-            --source "." \
-            --pattern "*.csv" \
-            --overwrite true \
-            --connection-string "$CONNECTION_STRING"
+        # E. Clean up: Delete the runner IP rule, leaving your laptop IP intact!
+        echo "Restoring secure private network baseline..."
+        az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+
