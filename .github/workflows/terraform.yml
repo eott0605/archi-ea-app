@@ -70,25 +70,40 @@ jobs:
         CLEAN_NAME=$(terraform output -raw storage_account_name | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ')
         echo "storage_account=$CLEAN_NAME" >> $GITHUB_OUTPUT
 
-    # 8. DIAGNOSTIC RUN: Find out exactly what Azure sees
-    - name: Diagnose Azure Permissions
+    # 8. Run your script inside azure/cli@v2 mapping environment blocks
+    - name: Upload CSV Files to Private Azure Blob
       uses: azure/cli@v2
       env:
+        # Map parameters explicitly to the environment so the Docker container can read them
         TARGET_ACCOUNT: ${{ steps.get_sa_name.outputs.storage_account }}
-        RESOURCE_GROUP: "myResourceGroup"
+        RESOURCE_GROUP: "archi-ea-app-rg"
       with:
         inlineScript: |
-          echo "================ DIAGNOSTICS START ================"
+          # Fetch the public IP of the runner cleanly inside the container
+          RUNNER_IP=$(curl -s https://ifconfig.me)
+          echo "GitHub Runner Public IP identified as: $RUNNER_IP"
           
-          echo "1. Checking active logged-in account profile:"
-          az account show --query "{user:user.name, subscription:name, tenantId:tenantId}" --output table
+          # Temporarily allow public network paths and authorize the runner's IP
+          echo "Temporarily modifying Azure firewall rules..."
+          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled
+          az storage account network-rule add --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
           
-          echo "2. Testing if we can list ALL storage accounts in this subscription:"
-          az storage account list --query "[].{name:name, resourceGroup:resourceGroup}" --output table
+          # Wait 20 seconds for Azure's firewall changes to propagate globally
+          sleep 20
           
-          echo "3. Checking if we can read the target account metadata directly:"
-          # This will safely test the exact command failing right now
-          az storage account show --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query "{name:name, location:location}" --output table || echo "Failed to read storage account metadata."
+          # Execute file upload 
+          echo "Uploading CSV files..."
+          az storage blob upload-batch \
+            --account-name "$TARGET_ACCOUNT" \
+            --destination "data-files" \
+            --source "." \
+            --pattern "*.csv" \
+            --overwrite true \
+            --auth-mode login
+            
+          # Clean up and lock the account back down
+          echo "Restoring secure private network baseline..."
+          az storage account network-rule remove --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled
 
-          echo "================= DIAGNOSTICS END ================="
 
