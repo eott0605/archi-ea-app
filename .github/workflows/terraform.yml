@@ -112,7 +112,5 @@ jobs:
             
           # REMOVED: The cleanup lines have been deleted so Azure maintains your main.tf network block state!
           echo "Upload complete. Leaving firewall active for selected network access."
-          # FIXED TYPO: Changed --name to --account-name below
-          az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-          az storage account update --name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled
+          
 
