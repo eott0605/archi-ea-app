@@ -18,7 +18,7 @@ terraform {
 
 provider "azurerm" {
   features {}
-  use_oidc = true # Tells the provider to use GitHub's OIDC login
+  use_oidc                   = true # Tells the provider to use GitHub's OIDC login
   skip_provider_registration = true
 }
 
@@ -57,16 +57,4 @@ output "storage_connection_string" {
 output "storage_account_name" {
   value       = azurerm_storage_account.blob_storage.name
   description = "The name of the newly created storage account."
-}
-
-# Automatically fetches the official live list of GitHub IP addresses
-data "http" "github_meta" {
-  url = "https://github.com"
-}
-
-# Decodes the JSON response to extract only the Actions runner IPv4 addresses
-locals {
-  github_actions_ips = jsondecode(data.http.github_meta.response_body).actions
-  # Filters out IPv6 addresses because Azure Storage Firewalls only support IPv4 CIDR blocks
-  github_actions_ipv4 = [for ip in local.github_actions_ips : ip if !contains(split("", ip), ":")]
 }
