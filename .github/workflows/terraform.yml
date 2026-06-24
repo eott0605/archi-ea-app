@@ -49,15 +49,18 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. FIXED: Combined extraction of account name and connection string to GITHUB_OUTPUT
+    # 7. Extract variables and aggressively filter out HashiCorp wrapper logs
     - name: Get Storage Account Variables
       id: get_sa_vars
       run: |
+        # Isolate the clean account name
         CLEAN_NAME=$(terraform output -raw storage_account_name | grep -o 'modelinfoaccount' | head -n 1 | tr -d '\r\n ')
         echo "storage_account=$CLEAN_NAME" >> $GITHUB_OUTPUT
         
-        CONN_STR=$(terraform output -raw storage_connection_string | tr -d '\r\n')
+        # Isolate ONLY the true connection string line, dropping all wrapper/debug noise
+        CONN_STR=$(terraform output -raw storage_connection_string | grep -E '^DefaultEndpointsProtocol=https' | tr -d '\r\n ')
         echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
+
 
     # 8. High-speed direct upload using the secure connection string bypass
     - name: Upload CSV Files to Azure Blob
