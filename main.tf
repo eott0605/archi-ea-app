@@ -34,7 +34,8 @@ resource "azurerm_storage_account" "blob_storage" {
   # Enforce high security settings
   min_tls_version               = "TLS1_2"
   https_traffic_only_enabled    = true
-  public_network_access_enabled = false # Keeps it safe from the public web
+  # CHANGED: Allow public access ONLY from your whitelisted networks/IPs
+  public_network_access_enabled = true 
 
   # ADD THIS BLOCK TO ENABLE THE FIREWALL
   network_rules {
