@@ -110,8 +110,21 @@ jobs:
       id: get_sa_name
       run: |
         # This reads the output variable from Step 1 and saves it to GitHub env
-        SA_NAME=$(terraform output -raw storage_account_name)
-        echo "AZURE_STORAGE_ACCOUNT=$SA_NAME" >> $GITHUB_ENV
+        SA_NAME=$(terraform output -raw storage_account_name 2>&1) || {
+          echo "::error::Failed to retrieve storage_account_name from Terraform output"
+          exit 1
+        }
+
+        # Validate the output is not empty
+        if [ -z "$SA_NAME" ]; then
+          echo "::error::storage_account_name output is empty"
+          exit 1
+        fi
+
+        # Write to GITHUB_ENV with validation
+        echo "AZURE_STORAGE_ACCOUNT=${SA_NAME}" >> $GITHUB_ENV
+        echo "Storage Account Name: $SA_NAME"
+  
 
     # 8. Upload the three .csv files using the existing Azure OIDC session
     - name: Upload CSV Files to Azure Blob
