@@ -59,11 +59,6 @@ output "storage_account_name" {
   description = "The name of the newly created storage account."
 }
 
-output "storage_account_name" {
-  value       = azurerm_storage_account.blob_storage.name
-  description = "The name of the newly created storage account."
-}
-
 # Automatically fetches the official live list of GitHub IP addresses
 data "http" "github_meta" {
   url = "https://github.com"
