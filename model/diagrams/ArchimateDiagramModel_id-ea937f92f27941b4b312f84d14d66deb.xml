@@ -403,7 +403,7 @@
       content="This keeps from having data in a bucket creating charges when no longer useful.">
     <bounds
         x="788"
-        y="108"
+        y="132"
         width="169"
         height="80"/>
   </children>

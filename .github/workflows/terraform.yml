@@ -104,7 +104,7 @@ jobs:
           echo "Uploading CSV files..."
           az storage blob upload-batch \
             --account-name "$TARGET_ACCOUNT" \
-            --destination "data-files" \
+            --destination "modelinfocontainer" \
             --source "." \
             --pattern "*.csv" \
             --overwrite true \
