@@ -24,7 +24,7 @@ provider "azurerm" {
 
 # The new Storage Account you want to automatically create
 resource "azurerm_storage_account" "blob_storage" {
-  name                     = "modelinfosa"       # Must be unique globally, lowercase letters/numbers only
+  name                     = "modelinfoaccount"       # Must be unique globally, lowercase letters/numbers only
   resource_group_name      = "archi-ea-app-rg" # Your existing target RG
   location                 = "eastus"
   account_tier             = "Standard"
@@ -38,7 +38,12 @@ resource "azurerm_storage_account" "blob_storage" {
 }
 
 resource "azurerm_storage_container" "blob_container" {
-  name                  = "modelinfocon" # Name of your blob folder
+  name                  = "modelinfocontainer" # Name of your blob folder
   storage_account_id    = azurerm_storage_account.blob_storage.id
   container_access_type = "private" # Keeps your data safe and private
+}
+
+output "storage_account_name" {
+  value       = azurerm_storage_account.blob_storage.name
+  description = "The name of the newly created storage account."
 }
