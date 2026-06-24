@@ -124,7 +124,7 @@ jobs:
           # Loop through and upload each file to the 'data-files' container
           # Assumes your CSV files are in a folder named 'data' (change path if needed)
           az storage blob upload-batch \
-            --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+            --account-name $AZURE_STORAGE_ACCOUNT \
             --destination "data-files" \
             --source "." \
             --pattern "*.csv" \
