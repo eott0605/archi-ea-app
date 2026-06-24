@@ -32,9 +32,11 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # 3. Install Terraform CLI
+    # 3. Upgrade to v3 and add the wrapper configuration
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1
+      uses: hashicorp/setup-terraform@v3  # <-- Changed v1 to v3
+      with:
+        terraform_wrapper: false 
 
     # 4. Initialize Terraform directory configuration
     - name: Terraform Init
