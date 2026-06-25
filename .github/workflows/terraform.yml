@@ -1,51 +1,115 @@
-import os
-import glob
-import pandas as pd
-from azure.identity import AzureCliCredential
-import struct
-import pyodbc
+name: 'Terraform'
 
-# 1. Connect to Azure SQL securely using the existing OIDC GitHub Login token
-server = os.environ['SQL_SERVER']
-database = "modelinfodb"
-connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+on:
+  push:
+    branches: [ "master" ]
 
-# Use AzureCliCredential to capture the active GitHub OIDC login context
-credential = AzureCliCredential()
+permissions:
+  id-token: write
+  contents: read
 
-# FIXED: Changed the target string parameter to the valid Azure SQL database endpoint
-token_bytes = credential.get_token("https://windows.net").token.encode("utf-16-le")
-token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    environment: production
 
-# 2. Open the SQL connection
-conn = pyodbc.connect(connection_string, attrs_before={1213: token_struct})
-cursor = conn.cursor()
+    defaults:
+      run:
+        shell: bash
 
-# 3. Find and loop through all CSV files in your directory
-csv_files = glob.glob("./*.csv")
-for file_path in csv_files:
-    table_name = os.path.basename(file_path).replace(".csv", "")
-    print(f"Ingesting {file_path} into table '{table_name}'...")
-    
-    # Read CSV data into a Pandas DataFrame
-    df = pd.read_csv(file_path)
-    
-    # Clean up column names to be database safe (remove spaces/special characters)
-    df.columns = [c.replace(' ', '_').replace('-', '_') for c in df.columns]
-    
-    # Dynamically create the database table based on your CSV columns
-    columns_schema = ", ".join([f"[{col}] NVARCHAR(MAX)" for col in df.columns])
-    cursor.execute(f"DROP TABLE IF EXISTS [{table_name}]")
-    cursor.execute(f"CREATE TABLE [{table_name}] ({columns_schema})")
-    
-    # Insert data rows efficiently in chunks
-    placeholders = ", ".join(["?"] * len(df.columns))
-    insert_sql = f"INSERT INTO [{table_name}] VALUES ({placeholders})"
-    
-    # Bulk insert rows
-    cursor.executemany(insert_sql, df.values.tolist())
-    conn.commit()
+    steps:
+    # 1. Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v4
 
-print("All files successfully synced to Azure SQL!")
-cursor.close()
-conn.close()
+    # 2. Log in securely via OIDC
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    # 3. Force Azure to register the SQL provider before Terraform runs
+    - name: Pre-Register Azure SQL Provider
+      run: |
+        echo "Ensuring Microsoft.Sql provider namespace is active..."
+        az provider register --namespace "Microsoft.Sql"
+        sleep 15
+
+    # 4. Setup Terraform CLI with the wrapper disabled
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_wrapper: false 
+
+    # 5. Initialize Terraform directory configuration
+    - name: Terraform Init
+      run: terraform init
+
+    # 6. Generates an execution plan for Terraform
+    - name: Terraform Plan
+      run: terraform plan -input=false
+
+    # 7. Apply changes on push to master branch
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+      run: terraform apply -auto-approve -input=false
+
+    # 8. Extract variables cleanly (FIXED: Added the SQL server variable line!)
+    - name: Get Infrastructure Variables
+      id: get_vars
+      run: |
+        ACCOUNT_NAME=$(terraform output -raw storage_account_name)
+        echo "storage_account=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
+        
+        CONN_STR=$(terraform output -raw storage_connection_string)
+        echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
+        
+        SQL_FQDN=$(terraform output -raw sql_server_fqdn)
+        echo "sql_server=$SQL_FQDN" >> $GITHUB_OUTPUT
+
+    # 9. Whitelist IP, Wait for Network Sync, and Upload CSV Files
+    - name: Upload CSV Files to Private Azure Blob
+      env:
+        TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
+        CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
+        RESOURCE_GROUP: "archi-ea-app-rg"
+      run: |
+        RUNNER_IP=$(curl -s https://ifconfig.me)
+        echo "GitHub Runner Public IP identified as: $RUNNER_IP"
+        
+        echo "Temporarily modifying Azure firewall rules..."
+        az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+        
+        echo "Waiting 45 seconds for Azure firewall rules to propagate globally..."
+        sleep 45
+        
+        echo "Uploading CSV files..."
+        az storage blob upload-batch \
+          --destination "modelinfocontainer" \
+          --source "." \
+          --pattern "*.csv" \
+          --overwrite true \
+          --connection-string "$CONNECTION_STRING"
+          
+        echo "Restoring secure private network baseline..."
+        az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
+
+    # 10. ADDED: Install Python dependencies on the GitHub runner node
+    - name: Setup Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas pyodbc azure-identity
+
+    # 11. ADDED: Run the Python ingestion script using active OIDC credentials
+    - name: Sync CSV Data to Azure SQL Database
+      env:
+        SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_AUTHORITY_HOST: "https://microsoftonline.com"
+      run: |
+        python ingest.py
