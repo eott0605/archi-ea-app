@@ -14,7 +14,7 @@ connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};D
 credential = DefaultAzureCredential()
 
 # Fetch token specifically mapped to the Azure SQL endpoint
-token_bytes = credential.get_token("https://windows.net").token.encode("utf-16-le")
+token_bytes = credential.get_token("https://default.windows.net/.default").token.encode("utf-16-le")
 token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
 
 # 2. Open the SQL connection
