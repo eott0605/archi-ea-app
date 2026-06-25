@@ -49,7 +49,6 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # FIXED: Added the SQL Server resource group name output tracker
     - name: Get Infrastructure Variables
       id: get_vars
       run: |
@@ -62,28 +61,6 @@ jobs:
         SQL_FQDN=$(terraform output -raw sql_server_fqdn)
         echo "sql_server=$SQL_FQDN" >> $GITHUB_OUTPUT
 
-    - name: Upload CSV Files to Private Azure Blob
-      env:
-        TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
-        CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
-        RESOURCE_GROUP: "archi-ea-app-rg"
-      run: |
-        RUNNER_IP=$(curl -s https://ifconfig.me)
-        az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-        sleep 45
-        
-        az storage blob upload-batch \
-          --destination "modelinfocontainer" \
-          --source "." \
-          --pattern "*.csv" \
-          --overwrite true \
-          --connection-string "$CONNECTION_STRING"
-          
-        az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-
-    # FIXED: Explicitly install the Microsoft ODBC Driver binaries on the Ubuntu runner node host
-    # FIXED: Prepended sudo directly to commands and modernized repository configuration
-    # FIXED: Stripped out manual repository configuration and added non-interactive flags
     - name: Install System ODBC SQL Drivers
       run: |
         echo "Updating apt caches..."
@@ -92,32 +69,32 @@ jobs:
         echo "Installing Microsoft ODBC 18 driver binaries non-interactively..."
         sudo DEBIAN_FRONTEND=noninteractive ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
-
-
     - name: Setup Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pandas pyodbc azure-identity
 
-    # FIXED: Whitelists runner IP against SQL Server before execution and strips it immediately after
-    # FIXED: Handled the text parsing directly inside the Bash execution block
-    # FIXED: Swapped IP whitelisting for a brief Network DefaultAction toggle to bypass regional Azure NAT routing bugs
-    - name: Upload CSV Files to db
+    # FIXED: Duplicated step removed, storage upload completed, SQL firewall bypassed, and ingest.py executed sequentially.
+    - name: Upload CSV Files to Blob and Sync to Database
       env:
         TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
         CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
+        SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
         RESOURCE_GROUP: "archi-ea-app-rg"
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_AUTHORITY_HOST: "https://microsoftonline.com"
       run: |
-        echo "Temporarily opening Storage Account public access tier..."
+        echo "=== 1. Opening Storage Account Network Rules ==="
         az storage account update \
           --name "$TARGET_ACCOUNT" \
           --resource-group "$RESOURCE_GROUP" \
           --default-action Allow
         
-        echo "Waiting 15 seconds for network rules to propagate..."
         sleep 15
         
-        echo "Uploading CSV files..."
+        echo "=== 2. Uploading CSV Files to Azure Blob ==="
         az storage blob upload-batch \
           --destination "modelinfocontainer" \
           --source "." \
@@ -125,9 +102,28 @@ jobs:
           --overwrite true \
           --connection-string "$CONNECTION_STRING"
           
-        echo "Restoring secure private baseline network rules..."
+        echo "=== 3. Restoring Secure Private Storage Rules ==="
         az storage account update \
           --name "$TARGET_ACCOUNT" \
           --resource-group "$RESOURCE_GROUP" \
           --default-action Deny
 
+        echo "=== 4. Whitelisting Runner IP on Azure SQL Server ==="
+        RUNNER_IP=$(curl -s https://ifconfig.me)
+        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
+        
+        az sql server firewall-rule create \
+          --resource-group "$RESOURCE_GROUP" \
+          --server "$SERVER_SHORT_NAME" \
+          --name "GitHubRunnerSQL" \
+          --start-ip-address "$RUNNER_IP" \
+          --end-ip-address "$RUNNER_IP"
+
+        echo "=== 5. Running Database Ingestion Script ==="
+        python ingest.py
+
+        echo "=== 6. Closing Azure SQL Firewall Rule ==="
+        az sql server firewall-rule delete \
+          --resource-group "$RESOURCE_GROUP" \
+          --server "$SERVER_SHORT_NAME" \
+          --name "GitHubRunnerSQL"
