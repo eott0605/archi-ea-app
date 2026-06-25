@@ -59,7 +59,7 @@ output "storage_account_name" {
 }
 
 resource "azurerm_mssql_server" "sql_server" {
-  name                         = "modelinfosqlserver" # Must be globally unique
+  name                         = "modelinfosqlserver2" # Must be globally unique
   resource_group_name          = "archi-ea-app-rg"
   location                     = "eastus2"
   version                      = "12.0"
