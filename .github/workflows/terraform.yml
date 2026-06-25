@@ -20,11 +20,11 @@ jobs:
         shell: bash
 
     steps:
-    # 1. Checkout the repository to the GitHub Actions runner
+    # Checkout the repository to the GitHub Actions runner
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 2. Log in securely via OIDC
+    # Log in securely via OIDC
     - name: Azure Login
       uses: azure/login@v2
       with:
@@ -32,26 +32,35 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # 3. Upgrade to v3 and add the wrapper configuration
+    # NEW STEP: Force Azure to register the SQL provider before Terraform runs
+    - name: Pre-Register Azure SQL Provider
+      run: |
+        echo "Ensuring Microsoft.Sql provider namespace is active..."
+        az provider register --namespace "Microsoft.Sql"
+        
+        # Give the Azure subscription fabric a brief moment to sync the registration status
+        sleep 15
+
+    # Upgrade to v3 and add the wrapper configuration
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3  # <-- Changed v1 to v3
       with:
         terraform_wrapper: false 
 
-    # 4. Initialize Terraform directory configuration
+    # Initialize Terraform directory configuration
     - name: Terraform Init
       run: terraform init
 
-    # 5. Generates an execution plan for Terraform
+    # Generates an execution plan for Terraform
     - name: Terraform Plan
       run: terraform plan -input=false
 
-    # 6. Apply changes on push to master branch
+    # Apply changes on push to master branch
     - name: Terraform Apply
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 7. Extract variables cleanly using the v3 wrapperless outputs
+    # Extract variables cleanly using the v3 wrapperless outputs
     - name: Get Storage Account Variables
       id: get_sa_vars
       run: |
@@ -61,7 +70,7 @@ jobs:
         CONN_STR=$(terraform output -raw storage_connection_string)
         echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
 
-    # 8. Whitelist IP, Wait for Network Sync, and Upload CSV Files
+    # Whitelist IP, Wait for Network Sync, and Upload CSV Files
     - name: Upload CSV Files to Private Azure Blob
       env:
         TARGET_ACCOUNT: ${{ steps.get_sa_vars.outputs.storage_account }}

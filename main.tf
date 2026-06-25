@@ -18,7 +18,7 @@ terraform {
 
 provider "azurerm" {
   features {}
-  use_oidc                   = true # Tells the provider to use GitHub's OIDC login
+  use_oidc                   = true 
 }
 
 resource "azurerm_storage_account" "blob_storage" {
