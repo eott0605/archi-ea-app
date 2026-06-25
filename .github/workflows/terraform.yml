@@ -82,14 +82,21 @@ jobs:
         az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
 
     # FIXED: Explicitly install the Microsoft ODBC Driver binaries on the Ubuntu runner node host
+    # FIXED: Prepended sudo directly to commands and modernized repository configuration
     - name: Install System ODBC SQL Drivers
       run: |
-        sudo su
-        curl https://microsoft.com | apt-key add -
-        curl https://microsoft.com(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list
-        exit
+        echo "Adding Microsoft package signing key..."
+        curl -fsSL https://microsoft.com | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+        
+        echo "Adding Microsoft production repository listing..."
+        curl -fsSL https://microsoft.com(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+        
+        echo "Updating apt caches..."
         sudo apt-get update
+        
+        echo "Installing Microsoft ODBC 18 driver binaries..."
         sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
 
     - name: Setup Python Dependencies
       run: |
@@ -99,7 +106,7 @@ jobs:
     # FIXED: Whitelists runner IP against SQL Server before execution and strips it immediately after
     # FIXED: Handled the text parsing directly inside the Bash execution block
     # FIXED: Swapped IP whitelisting for a brief Network DefaultAction toggle to bypass regional Azure NAT routing bugs
-    - name: Upload CSV Files to Private Azure Blob
+    - name: Upload CSV Files to db
       env:
         TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
         CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
