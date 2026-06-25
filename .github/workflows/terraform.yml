@@ -98,35 +98,33 @@ jobs:
 
     # FIXED: Whitelists runner IP against SQL Server before execution and strips it immediately after
     # FIXED: Handled the text parsing directly inside the Bash execution block
-    - name: Sync CSV Data to Azure SQL Database
+    # FIXED: Swapped IP whitelisting for a brief Network DefaultAction toggle to bypass regional Azure NAT routing bugs
+    - name: Upload CSV Files to Private Azure Blob
       env:
-        SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
+        TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
+        CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
         RESOURCE_GROUP: "archi-ea-app-rg"
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        AZURE_AUTHORITY_HOST: "https://microsoftonline.com"
       run: |
-        RUNNER_IP=$(curl -s https://ifconfig.me)
-        
-        # Bash extracts just the short name (e.g., modelinfosqlserver3) from the FQDN
-        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
-        echo "Extracted Short Server Name: $SERVER_SHORT_NAME"
-        
-        echo "Opening Azure SQL Firewall for runner IP: $RUNNER_IP"
-        az sql server firewall-rule create \
+        echo "Temporarily opening Storage Account public access tier..."
+        az storage account update \
+          --name "$TARGET_ACCOUNT" \
           --resource-group "$RESOURCE_GROUP" \
-          --server "$SERVER_SHORT_NAME" \
-          --name "GitHubRunnerSQL" \
-          --start-ip-address "$RUNNER_IP" \
-          --end-ip-address "$RUNNER_IP"
+          --default-action Allow
         
-        echo "Running Python database ingestion..."
-        python ingest.py
+        echo "Waiting 15 seconds for network rules to propagate..."
+        sleep 15
         
-        echo "Closing Azure SQL Firewall baseline security..."
-        az sql server firewall-rule delete \
+        echo "Uploading CSV files..."
+        az storage blob upload-batch \
+          --destination "modelinfocontainer" \
+          --source "." \
+          --pattern "*.csv" \
+          --overwrite true \
+          --connection-string "$CONNECTION_STRING"
+          
+        echo "Restoring secure private baseline network rules..."
+        az storage account update \
+          --name "$TARGET_ACCOUNT" \
           --resource-group "$RESOURCE_GROUP" \
-          --server "$SERVER_SHORT_NAME" \
-          --name "GitHubRunnerSQL"
+          --default-action Deny
 
