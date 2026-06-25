@@ -3,7 +3,7 @@ name: 'Terraform'
 on:
   push:
     branches: [ "master" ]
-  pull_request:
+  # pull_request:
 
 permissions:
   id-token: write
