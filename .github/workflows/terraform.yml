@@ -83,19 +83,15 @@ jobs:
 
     # FIXED: Explicitly install the Microsoft ODBC Driver binaries on the Ubuntu runner node host
     # FIXED: Prepended sudo directly to commands and modernized repository configuration
+    # FIXED: Stripped out manual repository configuration and added non-interactive flags
     - name: Install System ODBC SQL Drivers
       run: |
-        echo "Adding Microsoft package signing key..."
-        curl -fsSL https://microsoft.com | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-        
-        echo "Adding Microsoft production repository listing..."
-        curl -fsSL https://microsoft.com(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-        
         echo "Updating apt caches..."
         sudo apt-get update
         
-        echo "Installing Microsoft ODBC 18 driver binaries..."
-        sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+        echo "Installing Microsoft ODBC 18 driver binaries non-interactively..."
+        sudo DEBIAN_FRONTEND=noninteractive ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
 
 
     - name: Setup Python Dependencies
