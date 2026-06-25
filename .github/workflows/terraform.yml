@@ -97,25 +97,36 @@ jobs:
         pip install pandas pyodbc azure-identity
 
     # FIXED: Whitelists runner IP against SQL Server before execution and strips it immediately after
+    # FIXED: Handled the text parsing directly inside the Bash execution block
     - name: Sync CSV Data to Azure SQL Database
       env:
         SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
         RESOURCE_GROUP: "archi-ea-app-rg"
-        # Extract server name from FQDN (e.g., modelinfosqlserver3.database.windows.net -> modelinfosqlserver3)
-        SQL_SERVER_NAME: ${{ sed 's/\..*//' <<< steps.get_vars.outputs.sql_server }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         AZURE_AUTHORITY_HOST: "https://microsoftonline.com"
       run: |
         RUNNER_IP=$(curl -s https://ifconfig.me)
-        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
         
-        echo "Opening Azure SQL Firewall for runner IP..."
-        az sql server firewall-rule create --resource-group "$RESOURCE_GROUP" --server "$SERVER_SHORT_NAME" --name "GitHubRunnerSQL" --start-ip-address "$RUNNER_IP" --end-ip-address "$RUNNER_IP"
+        # Bash extracts just the short name (e.g., modelinfosqlserver3) from the FQDN
+        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
+        echo "Extracted Short Server Name: $SERVER_SHORT_NAME"
+        
+        echo "Opening Azure SQL Firewall for runner IP: $RUNNER_IP"
+        az sql server firewall-rule create \
+          --resource-group "$RESOURCE_GROUP" \
+          --server "$SERVER_SHORT_NAME" \
+          --name "GitHubRunnerSQL" \
+          --start-ip-address "$RUNNER_IP" \
+          --end-ip-address "$RUNNER_IP"
         
         echo "Running Python database ingestion..."
         python ingest.py
         
         echo "Closing Azure SQL Firewall baseline security..."
-        az sql server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server "$SERVER_SHORT_NAME" --name "GitHubRunnerSQL"
+        az sql server firewall-rule delete \
+          --resource-group "$RESOURCE_GROUP" \
+          --server "$SERVER_SHORT_NAME" \
+          --name "GitHubRunnerSQL"
+
