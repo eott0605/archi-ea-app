@@ -61,7 +61,7 @@ output "storage_account_name" {
 resource "azurerm_mssql_server" "sql_server" {
   name                         = "modelinfosqlserver2" # Must be globally unique
   resource_group_name          = "archi-ea-app-rg"
-  location                     = "eastus2"
+  location                     = "centralus"
   version                      = "12.0"
   administrator_login          = "sqladmin"
   administrator_login_password = "SecurePassword123!" # In production, pull this from a GitHub Secret
