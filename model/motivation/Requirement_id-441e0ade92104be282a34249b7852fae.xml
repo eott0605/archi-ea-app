@@ -1,0 +1,5 @@
+<archimate:Requirement
+    xmlns:archimate="http://www.archimatetool.com/archimate"
+    name="Infrastructure as Code (IaC)"
+    id="id-441e0ade92104be282a34249b7852fae"
+    documentation="A fully repeatable deployment blueprint built with Terraform."/>

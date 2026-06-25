@@ -1,0 +1,5 @@
+<archimate:Requirement
+    xmlns:archimate="http://www.archimatetool.com/archimate"
+    name="Automated Data Pipelines"
+    id="id-9182dc914efb45bd83a1b2e3372a73fa"
+    documentation="Pulling dynamic infrastructure metadata variables on the fly to batch-upload file payloads."/>

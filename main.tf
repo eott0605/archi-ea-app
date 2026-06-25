@@ -48,13 +48,46 @@ resource "azurerm_storage_container" "blob_container" {
   container_access_type = "private" 
 }
 
-# Also add an output for the storage connection string
 output "storage_connection_string" {
   value     = azurerm_storage_account.blob_storage.primary_connection_string
   sensitive = true
+  description = "storage connection string"
 }
 
 output "storage_account_name" {
   value       = azurerm_storage_account.blob_storage.name
-  description = "The name of the newly created storage account."
+  description = "The name of the storage account."
+}
+
+resource "azurerm_mssql_server" "sql_server" {
+  name                         = "modelinfosqlserver" # Must be globally unique
+  resource_group_name          = "archi-ea-app-rg"
+  location                     = "eastus"
+  version                      = "12.0"
+  administrator_login          = "sqladmin"
+  administrator_login_password = "SecurePassword123!" # In production, pull this from a GitHub Secret
+
+  # Enforce high security
+  minimum_tls_version = "1.2"
+}
+
+resource "azurerm_mssql_database" "sql_db" {
+  name           = "modelinfodb"
+  server_id      = azurerm_mssql_server.sql_server.id
+  collation      = "SQL_Latin1_General_CP1_CI_AS"
+  license_type   = "LicenseIncluded"
+  max_size_gb    = 2
+  sku_name       = "Basic" # Very cheap, perfect for <10,000 rows
+}
+
+resource "azurerm_mssql_firewall_rule" "allow_azure" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.sql_server.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+output "sql_server_fqdn" {
+  value = azurerm_mssql_server.sql_server.fully_qualified_domain_name
+  description = "The name of the SQL Server"
 }

@@ -1,0 +1,5 @@
+<archimate:Requirement
+    xmlns:archimate="http://www.archimatetool.com/archimate"
+    name="Network Hardening &amp; Security"
+    id="id-9df1b27034fb48b584a32ca177dd3315"
+    documentation="A fully locked-down storage account protected by an active network firewall, keeping your data safe from the public web."/>

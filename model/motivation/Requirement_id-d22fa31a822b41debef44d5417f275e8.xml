@@ -1,0 +1,5 @@
+<archimate:Requirement
+    xmlns:archimate="http://www.archimatetool.com/archimate"
+    name="OIDC Secure Authentication"
+    id="id-d22fa31a822b41debef44d5417f275e8"
+    documentation="No weak, static passwords stored in GitHub—just pure cloud federation."/>
