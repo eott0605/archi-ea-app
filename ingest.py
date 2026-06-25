@@ -19,7 +19,14 @@ token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_byt
 
 
 # 2. Open the SQL connection
-conn = pyodbc.connect(connection_string, attrs_before={1213: token_struct})
+# FIXED: Included both 1213 and 1256 token attribute definitions to satisfy ODBC Driver 18 constraints
+conn = pyodbc.connect(
+    connection_string, 
+    attrs_before={
+        1213: token_struct,
+        1256: token_struct
+    }
+)
 cursor = conn.cursor()
 
 # OPTIMIZATION: Drastically increases bulk insert performance
