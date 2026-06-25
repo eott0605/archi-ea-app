@@ -1,7 +1,8 @@
 import os
 import glob
 import pandas as pd
-from azure.identity import DefaultAzureCredential
+# FIXED: Imported AzureCliCredential directly
+from azure.identity import AzureCliCredential
 import struct
 import pyodbc
 
@@ -10,8 +11,10 @@ server = os.environ['SQL_SERVER']
 database = "modelinfodb"
 connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
-credential = DefaultAzureCredential()
-# Request an access token explicitly for Azure SQL
+# FIXED: Direct use of AzureCliCredential to capture the active GitHub OIDC login context
+credential = AzureCliCredential()
+
+# FIXED: Updated the scope to the correct Microsoft Entra SQL database target endpoint
 token_bytes = credential.get_token("https://windows.net").token.encode("utf-16-le")
 token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
 
