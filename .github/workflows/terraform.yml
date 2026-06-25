@@ -19,11 +19,9 @@ jobs:
         shell: bash
 
     steps:
-    # 1. Checkout the repository to the GitHub Actions runner
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 2. Log in securely via OIDC
     - name: Azure Login
       uses: azure/login@v2
       with:
@@ -31,33 +29,27 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # 3. Force Azure to register the SQL provider before Terraform runs
     - name: Pre-Register Azure SQL Provider
       run: |
-        echo "Ensuring Microsoft.Sql provider namespace is active..."
         az provider register --namespace "Microsoft.Sql"
         sleep 15
 
-    # 4. Setup Terraform CLI with the wrapper disabled
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_wrapper: false 
 
-    # 5. Initialize Terraform directory configuration
     - name: Terraform Init
       run: terraform init
 
-    # 6. Generates an execution plan for Terraform
     - name: Terraform Plan
       run: terraform plan -input=false
 
-    # 7. Apply changes on push to master branch
     - name: Terraform Apply
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
 
-    # 8. Extract variables cleanly (FIXED: Added the SQL server variable line!)
+    # FIXED: Added the SQL Server resource group name output tracker
     - name: Get Infrastructure Variables
       id: get_vars
       run: |
@@ -70,7 +62,6 @@ jobs:
         SQL_FQDN=$(terraform output -raw sql_server_fqdn)
         echo "sql_server=$SQL_FQDN" >> $GITHUB_OUTPUT
 
-    # 9. Whitelist IP, Wait for Network Sync, and Upload CSV Files
     - name: Upload CSV Files to Private Azure Blob
       env:
         TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
@@ -78,15 +69,9 @@ jobs:
         RESOURCE_GROUP: "archi-ea-app-rg"
       run: |
         RUNNER_IP=$(curl -s https://ifconfig.me)
-        echo "GitHub Runner Public IP identified as: $RUNNER_IP"
-        
-        echo "Temporarily modifying Azure firewall rules..."
         az storage account network-rule add --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
-        
-        echo "Waiting 45 seconds for Azure firewall rules to propagate globally..."
         sleep 45
         
-        echo "Uploading CSV files..."
         az storage blob upload-batch \
           --destination "modelinfocontainer" \
           --source "." \
@@ -94,22 +79,43 @@ jobs:
           --overwrite true \
           --connection-string "$CONNECTION_STRING"
           
-        echo "Restoring secure private network baseline..."
         az storage account network-rule remove --account-name "$TARGET_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP"
 
-    # 10. ADDED: Install Python dependencies on the GitHub runner node
+    # FIXED: Explicitly install the Microsoft ODBC Driver binaries on the Ubuntu runner node host
+    - name: Install System ODBC SQL Drivers
+      run: |
+        sudo su
+        curl https://microsoft.com | apt-key add -
+        curl https://microsoft.com(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list
+        exit
+        sudo apt-get update
+        sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
     - name: Setup Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pandas pyodbc azure-identity
 
-    # 11. ADDED: Run the Python ingestion script using active OIDC credentials
+    # FIXED: Whitelists runner IP against SQL Server before execution and strips it immediately after
     - name: Sync CSV Data to Azure SQL Database
       env:
         SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
+        RESOURCE_GROUP: "archi-ea-app-rg"
+        # Extract server name from FQDN (e.g., modelinfosqlserver3.database.windows.net -> modelinfosqlserver3)
+        SQL_SERVER_NAME: ${{ sed 's/\..*//' <<< steps.get_vars.outputs.sql_server }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         AZURE_AUTHORITY_HOST: "https://microsoftonline.com"
       run: |
+        RUNNER_IP=$(curl -s https://ifconfig.me)
+        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
+        
+        echo "Opening Azure SQL Firewall for runner IP..."
+        az sql server firewall-rule create --resource-group "$RESOURCE_GROUP" --server "$SERVER_SHORT_NAME" --name "GitHubRunnerSQL" --start-ip-address "$RUNNER_IP" --end-ip-address "$RUNNER_IP"
+        
+        echo "Running Python database ingestion..."
         python ingest.py
+        
+        echo "Closing Azure SQL Firewall baseline security..."
+        az sql server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server "$SERVER_SHORT_NAME" --name "GitHubRunnerSQL"
