@@ -2,6 +2,9 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:archimate="http://www.archimatetool.com/archimate"
     id="id-a917000fe7694d768517d7eabcb82358">
+  <properties
+      key="Protocol"
+      value="SSH"/>
   <source
       xsi:type="archimate:ApplicationComponent"
       href="ApplicationComponent_id-e36f2c8e7fae443daeab8c8e2b94b57a.xml#id-e36f2c8e7fae443daeab8c8e2b94b57a"/>

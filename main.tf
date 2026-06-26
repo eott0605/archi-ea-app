@@ -8,6 +8,16 @@ variable "azure_tenant_id" {
   description = "Passed from GitHub Secret via TF_VAR_azure_tenant_id"
 }
 
+variable "sql_administrator_login" {
+  type        = string
+  description = "Passed from GitHub Secret via TF_VAR_sql_administrator_login"
+}
+
+variable "sql_administrator_login_password" {
+  type        = string
+  description = "Passed from GitHub Secret via TF_VAR_sql_administrator_login_password"
+}
+
 terraform {
   required_version = ">= 1.5.0"  
   required_providers {
@@ -83,8 +93,8 @@ resource "azurerm_mssql_server" "sql_server" {
   resource_group_name          = "archi-ea-app-rg"
   location                     = "centralus"
   version                      = "12.0"
-  administrator_login          = "sqladmin"
-  administrator_login_password = "SecurePassword123!"
+  administrator_login          = var.sql_administrator_login
+  administrator_login_password = var.sql_administrator_login_password
   minimum_tls_version = "1.2"
 
   azuread_administrator {

@@ -46,6 +46,8 @@ jobs:
       env:
         TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
         TF_VAR_azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+        TF_VAR_sql_administrator_login: ${{ secrets.SQL_ADMINISTRATOR_LOGIN }}
+        TF_VAR_sql_administrator_login_password: ${{ secrets.SQL_ADMINISTRATOR_LOGIN_PASSWORD }}
       run: terraform plan -input=false
 
     - name: Terraform Apply
@@ -53,6 +55,8 @@ jobs:
       env:
         TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
         TF_VAR_azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+        TF_VAR_sql_administrator_login: ${{ secrets.SQL_ADMINISTRATOR_LOGIN }}
+        TF_VAR_sql_administrator_login_password: ${{ secrets.SQL_ADMINISTRATOR_LOGIN_PASSWORD }}
       run: terraform apply -auto-approve -input=false
 
     - name: Get Infrastructure Variables
