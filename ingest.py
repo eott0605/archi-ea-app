@@ -15,7 +15,7 @@ connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};D
 credential = DefaultAzureCredential()
 
 # 3. Retrieve and structure token signature bytes safely for 64-bit Linux environments
-token_obj = credential.get_token("https://windows.net")
+token_obj = credential.get_token("https://database.windows.net/.default")
 token_bytes = token_obj.token.encode("utf-16-le")
 token_struct = struct.pack("=i", len(token_bytes)) + token_bytes
 

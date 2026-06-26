@@ -119,10 +119,13 @@ jobs:
           --start-ip-address "$RUNNER_IP" \
           --end-ip-address "$RUNNER_IP"
 
-        echo "=== 5. Running Database Ingestion Script ==="
+        echo "=== 5. Debugging File Contents ==="
+        cat ingest.py
+
+        echo "=== 6. Running Database Ingestion Script ==="
         python ingest.py
 
-        echo "=== 6. Closing Azure SQL Firewall Rule ==="
+        echo "=== 7. Closing Azure SQL Firewall Rule ==="
         az sql server firewall-rule delete \
           --resource-group "$RESOURCE_GROUP" \
           --server "$SERVER_SHORT_NAME" \
