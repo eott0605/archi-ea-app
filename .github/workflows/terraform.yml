@@ -123,6 +123,8 @@ jobs:
         cat ingest.py
 
         echo "=== 6. Running Database Ingestion Script ==="
+        # FORCE Python's identity library to only request tokens inside the specific target database tenant
+        export AZURE_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
         python ingest.py
 
         echo "=== 7. Closing Azure SQL Firewall Rule ==="
