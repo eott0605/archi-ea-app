@@ -9,8 +9,8 @@ from azure.identity import DefaultAzureCredential
 server = os.environ['SQL_SERVER']
 database = "modelinfodb"
 
-#connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
-connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Authentication=ActiveDirectoryServicePrincipal;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+#connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Authentication=ActiveDirectoryServicePrincipal;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
 # 2. Authenticate cleanly with explicit target Tenant matching context
 credential = DefaultAzureCredential()
