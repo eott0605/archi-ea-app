@@ -30,10 +30,6 @@ terraform {
   }
 }
 
-data "azuread_service_principal" "github_sp" {
-  client_id = "YOUR_AZURE_CLIENT_ID_HERE" # Replace with your actual client ID or use a variable
-}
-
 provider "azurerm" {
   features {}
   use_oidc                   = true 
