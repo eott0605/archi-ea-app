@@ -8,15 +8,11 @@ from azure.identity import DefaultAzureCredential
 # 1. Capture parameters from Environment Variables FIRST
 server = os.environ['SQL_SERVER']
 database = "modelinfodb"
-target_tenant = os.environ.get('AZURE_TENANT_ID') # FIXED: Variable declared before use!
 
 connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
 # 2. Authenticate cleanly with explicit target Tenant matching context
-credential = DefaultAzureCredential(
-    tenant_id=target_tenant,
-    additionally_allowed_tenants=["*"]
-)
+credential = DefaultAzureCredential()
 
 # 3. Retrieve and structure token signature bytes safely for 64-bit Linux environments
 token_obj = credential.get_token("https://windows.net")
