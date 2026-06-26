@@ -14,8 +14,14 @@ connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};D
 credential = DefaultAzureCredential()
 
 # FIXED: Replaced the broken/typo scope string with the exact official Azure SQL URI scope
-token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("utf-16-le")
-token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
+# 1. Fetch the string token token
+token_obj = credential.get_token("https://database.windows.net/.default")
+
+# 2. Encode explicitly to UTF-16 Little Endian bytes
+token_bytes = token_obj.token.encode("utf-16-le")
+
+# FIXED: Structural binding logic to strictly prevent 64-bit Linux byte-padding alignment corruption
+token_struct = struct.pack("=i", len(token_bytes)) + token_bytes
 
 
 # 2. Open the SQL connection
