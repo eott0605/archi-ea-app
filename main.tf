@@ -1,9 +1,23 @@
+variable "azure_client_id" {
+  type        = string
+  description = "Passed from GitHub Secret via TF_VAR_azure_client_id"
+}
+
+variable "azure_tenant_id" {
+  type        = string
+  description = "Passed from GitHub Secret via TF_VAR_azure_tenant_id"
+}
+
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.5.0"  
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
+    }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
     }
   }
   # Securely store state in an existing storage account
@@ -16,9 +30,19 @@ terraform {
   }
 }
 
+data "azuread_service_principal" "github_sp" {
+  client_id = "YOUR_AZURE_CLIENT_ID_HERE" # Replace with your actual client ID or use a variable
+}
+
 provider "azurerm" {
   features {}
   use_oidc                   = true 
+}
+
+provider "azuread" {}
+
+data "azuread_service_principal" "github_sp" {
+  client_id = var.azure_client_id
 }
 
 resource "azurerm_storage_account" "blob_storage" {
@@ -59,15 +83,19 @@ output "storage_account_name" {
 }
 
 resource "azurerm_mssql_server" "sql_server" {
-  name                         = "modelinfosqlserver3" # Must be globally unique
+  name                         = "modelinfosqlserver3" 
   resource_group_name          = "archi-ea-app-rg"
   location                     = "centralus"
   version                      = "12.0"
   administrator_login          = "sqladmin"
-  administrator_login_password = "SecurePassword123!" # In production, pull this from a GitHub Secret
-
-  # Enforce high security
+  administrator_login_password = "SecurePassword123!"
   minimum_tls_version = "1.2"
+
+  azuread_administrator {
+    login_username = "github-actions-principal"
+    object_id      = data.azuread_service_principal.github_sp.object_id
+    tenant_id      = var.azure_tenant_id
+  }
 }
 
 resource "azurerm_mssql_database" "sql_db" {
