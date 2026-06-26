@@ -11,7 +11,11 @@ database = "modelinfodb"
 connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
 # Use DefaultAzureCredential to automatically process the OIDC Env vars
-credential = DefaultAzureCredential()
+# FIXED: Explicitly force the credential mechanism to look up the database's exact matching tenant
+credential = DefaultAzureCredential(
+    tenant_id=target_tenant,
+    additionally_allowed_tenants=["*"] # Allows cross-tenant execution fallback if needed
+)
 
 # FIXED: Replaced the broken/typo scope string with the exact official Azure SQL URI scope
 # 1. Fetch the string token token
