@@ -1,35 +1,29 @@
 import os
 import glob
 import pandas as pd
-from azure.identity import DefaultAzureCredential # FIXED: Changed from AzureCliCredential
 import struct
 import pyodbc
+from azure.identity import DefaultAzureCredential
 
-# 1. Connect to Azure SQL securely using Environment Variables mapped by OIDC
+# 1. Capture parameters from Environment Variables FIRST
 server = os.environ['SQL_SERVER']
 database = "modelinfodb"
+target_tenant = os.environ.get('AZURE_TENANT_ID') # FIXED: Variable declared before use!
+
 connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
-# Use DefaultAzureCredential to automatically process the OIDC Env vars
-# FIXED: Explicitly force the credential mechanism to look up the database's exact matching tenant
+# 2. Authenticate cleanly with explicit target Tenant matching context
 credential = DefaultAzureCredential(
     tenant_id=target_tenant,
-    additionally_allowed_tenants=["*"] # Allows cross-tenant execution fallback if needed
+    additionally_allowed_tenants=["*"]
 )
 
-# FIXED: Replaced the broken/typo scope string with the exact official Azure SQL URI scope
-# 1. Fetch the string token token
-token_obj = credential.get_token("https://database.windows.net/.default")
-
-# 2. Encode explicitly to UTF-16 Little Endian bytes
+# 3. Retrieve and structure token signature bytes safely for 64-bit Linux environments
+token_obj = credential.get_token("https://windows.net")
 token_bytes = token_obj.token.encode("utf-16-le")
-
-# FIXED: Structural binding logic to strictly prevent 64-bit Linux byte-padding alignment corruption
 token_struct = struct.pack("=i", len(token_bytes)) + token_bytes
 
-
-# 2. Open the SQL connection
-# FIXED: Included both 1213 and 1256 token attribute definitions to satisfy ODBC Driver 18 constraints
+# 4. Initialize Database Connection Engine
 conn = pyodbc.connect(
     connection_string, 
     attrs_before={
@@ -42,7 +36,7 @@ cursor = conn.cursor()
 # OPTIMIZATION: Drastically increases bulk insert performance
 cursor.fast_executemany = True
 
-# 3. Find and loop through all CSV files in your directory
+# 5. Process and Ingest Local CSV Content
 csv_files = glob.glob("./*.csv")
 for file_path in csv_files:
     table_name = os.path.basename(file_path).replace(".csv", "")
