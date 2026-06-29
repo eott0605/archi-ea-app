@@ -34,6 +34,7 @@
 "id-40e132c4454449948f11957783ef873b","Artifact","relations.csv blob","",""
 "id-967cbf3b192549458e4ff211148c384d","Artifact","relations.csv local","",""
 "id-c1181b166d2e4cc98be66e84d71a7955","Artifact","relations.csv repo","",""
+"id-c039b40f135140d89ab9ad9803815819","Artifact","requirements.txt","",""
 "id-bf0c67dc033d48388703130ed7443a47","Artifact","terraform.yml","",""
 "id-07ed34fe2698410db8c86f7591104c00","Device","Laptop","",""
 "id-98e559d95443448bbf5b31eef892b940","Node","Azure Cloud","",""
