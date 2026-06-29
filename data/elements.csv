@@ -23,6 +23,7 @@
 "id-ce4c1903d79347fb87c8ea46d71bd9a0","DataObject","modelinfocontainer","",""
 "id-c59dbd028f6844c6b5cc4f45922c9477","DataObject","modelinfodb","",""
 "id-865be743e0324338b5893be782da2854","DataObject","tfstate","",""
+"id-cade0727253144a4ab801b61e1c66ec6","Artifact","data.yml","",""
 "id-77b605197998497e8b660596890d6af4","Artifact","elements.csv blob","",""
 "id-b44e76c5c8da49ab86c3abb9dd5d4c20","Artifact","elements.csv local","",""
 "id-fd39ff8e80d3463eb514f35ab5bc3886","Artifact","elements.csv repo","",""
