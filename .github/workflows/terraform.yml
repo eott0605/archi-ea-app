@@ -1,8 +1,10 @@
-name: 'Terraform'
+name: 'Terraform (Infra)'
 
 on:
   push:
     branches: [ "master" ]
+    paths:
+      - 'infra/**'
 
 permissions:
   id-token: write
@@ -10,7 +12,7 @@ permissions:
 
 jobs:
   terraform:
-    name: 'Terraform'
+    name: 'Terraform Apply'
     runs-on: ubuntu-latest
     environment: production
 
@@ -29,20 +31,17 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Pre-Register Azure SQL Provider
-      run: |
-        az provider register --namespace "Microsoft.Sql"
-        sleep 15
-
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_wrapper: false 
+        terraform_wrapper: false
 
     - name: Terraform Init
+      working-directory: infra
       run: terraform init
 
     - name: Terraform Plan
+      working-directory: infra
       env:
         TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
         TF_VAR_azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
@@ -51,94 +50,11 @@ jobs:
       run: terraform plan -input=false
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+      working-directory: infra
+      if: github.ref == 'refs/heads/master'
       env:
         TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
         TF_VAR_azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
         TF_VAR_sql_administrator_login: ${{ secrets.SQL_ADMINISTRATOR_LOGIN }}
         TF_VAR_sql_administrator_login_password: ${{ secrets.SQL_ADMINISTRATOR_LOGIN_PASSWORD }}
       run: terraform apply -auto-approve -input=false
-
-    - name: Get Infrastructure Variables
-      id: get_vars
-      run: |
-        ACCOUNT_NAME=$(terraform output -raw storage_account_name)
-        echo "storage_account=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
-        
-        CONN_STR=$(terraform output -raw storage_connection_string)
-        echo "connection_string=$CONN_STR" >> $GITHUB_OUTPUT
-        
-        SQL_FQDN=$(terraform output -raw sql_server_fqdn)
-        echo "sql_server=$SQL_FQDN" >> $GITHUB_OUTPUT
-
-    - name: Install System ODBC SQL Drivers
-      run: |
-        echo "Updating apt caches..."
-        sudo apt-get update
-        
-        echo "Installing Microsoft ODBC 18 driver binaries non-interactively..."
-        sudo DEBIAN_FRONTEND=noninteractive ACCEPT_EULA=Y apt-get install -y msodbcsql18
-
-    - name: Setup Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas pyodbc azure-identity
-
-    
-    - name: Upload CSV Files to Blob and Sync to Database
-      env:
-        TARGET_ACCOUNT: ${{ steps.get_vars.outputs.storage_account }}
-        CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
-        SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
-        RESOURCE_GROUP: "archi-ea-app-rg"
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        AZURE_AUTHORITY_HOST: "https://login.microsoftonline.com"
-      run: |
-        echo "=== 1. Opening Storage Account Network Rules ==="
-        az storage account update \
-          --name "$TARGET_ACCOUNT" \
-          --resource-group "$RESOURCE_GROUP" \
-          --default-action Allow
-        
-        sleep 15
-        
-        echo "=== 2. Uploading CSV Files to Azure Blob ==="
-        az storage blob upload-batch \
-          --destination "modelinfocontainer" \
-          --source "." \
-          --pattern "*.csv" \
-          --overwrite true \
-          --connection-string "$CONNECTION_STRING"
-          
-        echo "=== 3. Restoring Secure Private Storage Rules ==="
-        az storage account update \
-          --name "$TARGET_ACCOUNT" \
-          --resource-group "$RESOURCE_GROUP" \
-          --default-action Deny
-
-        echo "=== 4. Whitelisting Runner IP on Azure SQL Server ==="
-        RUNNER_IP=$(curl -s https://ifconfig.me)
-        SERVER_SHORT_NAME=$(echo "$SQL_SERVER" | cut -d'.' -f1)
-        
-        az sql server firewall-rule create \
-          --resource-group "$RESOURCE_GROUP" \
-          --server "$SERVER_SHORT_NAME" \
-          --name "GitHubRunnerSQL" \
-          --start-ip-address "$RUNNER_IP" \
-          --end-ip-address "$RUNNER_IP"
-
-        echo "=== 5. Debugging File Contents ==="
-        cat ingest.py
-
-        echo "=== 6. Running Database Ingestion Script ==="
-        # FORCE Python's identity library to only request tokens inside the specific target database tenant
-        export AZURE_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
-        python ingest.py
-
-        echo "=== 7. Closing Azure SQL Firewall Rule ==="
-        az sql server firewall-rule delete \
-          --resource-group "$RESOURCE_GROUP" \
-          --server "$SERVER_SHORT_NAME" \
-          --name "GitHubRunnerSQL"

@@ -1,0 +1,72 @@
+name: 'Data Pipeline'
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - 'data/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    # Optional: cache Python deps (faster runs)
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('data/requirements.txt') }}
+
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r data/requirements.txt
+
+    - name: Get Terraform Outputs
+      id: get_vars
+      working-directory: infra
+      run: |
+        terraform init -input=false
+        echo "storage_account=$(terraform output -raw storage_account_name)" >> $GITHUB_OUTPUT
+        echo "connection_string=$(terraform output -raw storage_connection_string)" >> $GITHUB_OUTPUT
+        echo "sql_server=$(terraform output -raw sql_server_fqdn)" >> $GITHUB_OUTPUT
+
+    - name: Upload CSV Files to Blob
+      env:
+        CONNECTION_STRING: ${{ steps.get_vars.outputs.connection_string }}
+      run: |
+        az storage blob upload-batch \
+          --destination "modelinfocontainer" \
+          --source "data" \
+          --pattern "*.csv" \
+          --overwrite true \
+          --connection-string "$CONNECTION_STRING"
+
+    - name: Install ODBC SQL Driver
+      run: |
+        sudo apt-get update
+        sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
+    - name: Run Ingestion Script
+      env:
+        SQL_SERVER: ${{ steps.get_vars.outputs.sql_server }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      run: |
+        python data/ingest.py
