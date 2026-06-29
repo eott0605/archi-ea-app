@@ -9,7 +9,6 @@
 "id-110afcdc3023443e97b0f75baa181027","ApplicationEvent","Commit and Comment","",""
 "id-001ad3bd09b64c89b04048b812ba648d","ApplicationEvent","Publish to Repository","",""
 "id-4ab3aaa96a6041558363ceb2c1cee4c9","ApplicationFunction","Create / Update Infra","",""
-"id-ee706899601b4a338b0ebbb58aff015d","ApplicationFunction","Create Blob","",""
 "id-0d7a06dbcaa140398efa573d6eb189dc","ApplicationFunction","ingest.py","",""
 "id-a6211cc9d2c242cc8c6fc9cd802167f5","ApplicationFunction","Move Files","",""
 "id-cfe63bdc511e4439a9fbfa89ec629f54","ApplicationService","Azure SQL Database","",""

@@ -14,7 +14,7 @@ jobs:
   terraform:
     name: 'Terraform Apply'
     runs-on: ubuntu-latest
-    environment: production
+    #environment: production
 
     defaults:
       run:
